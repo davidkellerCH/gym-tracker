@@ -172,9 +172,27 @@
     border:1px solid var(--line);color:var(--chalk);padding:11px 18px;border-radius:999px;
     font-size:13px;z-index:60;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* login */
+  .login{position:fixed;inset:0;z-index:80;background:var(--ink);display:flex;
+    align-items:center;justify-content:center;padding:24px}
+  .login-card{width:100%;max-width:360px}
+  .login-brand{font-weight:800;letter-spacing:.2em;text-transform:uppercase;
+    font-size:22px;text-align:center}
+  .login-brand b{color:var(--brass)}
+  .login-sub{color:var(--muted);text-align:center;font-size:14px;margin:8px 0 26px}
+  .login label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--muted);margin:14px 0 6px}
+  .login input{width:100%;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:15px;font-size:16px;font-family:var(--sans);color:var(--chalk)}
+  .login input:focus{outline:2px solid var(--brass);outline-offset:1px}
+  .login-btn{width:100%;margin-top:22px}
+  .login-err{color:var(--down);font-size:13px;min-height:18px;margin-top:10px;text-align:center}
+  .login-foot{color:var(--faint);font-size:12px;text-align:center;margin-top:22px;line-height:1.5}
 </style>
 </head>
 <body>
+<div id="app" style="display:none">
 <header>
   <div class="bar">
     <div class="brand">IRON<b>LOG</b></div>
@@ -191,38 +209,81 @@
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
+</div>
+
+<div id="login" class="login" style="display:none">
+  <div class="login-card">
+    <div class="login-brand">IRON<b>LOG</b></div>
+    <p class="login-sub">Sign in to your training log.</p>
+    <label for="liEmail">Email</label>
+    <input id="liEmail" type="email" autocomplete="username" inputmode="email" placeholder="you@example.com" />
+    <label for="liPass">Password</label>
+    <input id="liPass" type="password" autocomplete="current-password" placeholder="••••••••" />
+    <div id="liErr" class="login-err"></div>
+    <button id="liBtn" class="btn primary login-btn">Sign in</button>
+    <p class="login-foot">Accounts are created in your Supabase dashboard. No public sign-up.</p>
+  </div>
+</div>
 
 <script>
 /* ========== CONFIG ========== */
 const SUPABASE_URL = "https://wqtfmwodopimxlkyrzok.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxdGZtd29kb3BpbXhsa3lyem9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NDU4MjksImV4cCI6MjA5NzUyMTgyOX0.vSOVVigEKajgxZqOApAM0vfeUMxJekAF1xYzehMAU_w";
 const REST = SUPABASE_URL + "/rest/v1/workouts";
-const HEADERS = { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" };
+const AUTH = SUPABASE_URL + "/auth/v1";
 const CACHE_KEY = "ironlog_cache_v1";
+const SESSION_KEY = "ironlog_session_v1";
 
-/* ========== LEGACY DATA (your existing log, imported once) ========== */
-const LEGACY = {"B::Weighted Pull-Up / Lat Pulldown":[{"date":"2026-06-03","sets":[{"weight":"25","reps":"10"},{"weight":"45","reps":"10"},{"weight":"45","reps":"10"},{"weight":"45","reps":"12"}]},{"date":"2026-06-07","sets":[{"weight":"25","reps":"10"},{"weight":"47.5","reps":"10"},{"weight":"47.5","reps":"10"},{"weight":"47.5","reps":"10"}]}],"B::Weighted Pull-Up / Lat Pulldown::comment":[{"comment":""}],"B::Barbell Bent-Over Row":[{"date":"2026-06-03","sets":[{"weight":"40","reps":"10"},{"weight":"40","reps":"11"},{"weight":"40","reps":"11"},{"weight":"40","reps":"11"}]},{"date":"2026-06-07","sets":[{"weight":"42.5","reps":"12"},{"weight":"42.5","reps":"12"},{"weight":"42.5","reps":"11"},{"weight":"42.5","reps":"10"}]},{"date":"2026-06-16","sets":[{"weight":"45","reps":"12"},{"weight":"45","reps":"12"},{"weight":"45","reps":"11"},{"weight":"45","reps":"10"}]}],"B::Barbell Bent-Over Row::comment":[{"comment":"wenn motiviert 47.5 probiere"}],"B::Seated Cable Row (wide grip)":[{"date":"2026-06-03","sets":[{"weight":"30","reps":"14"},{"weight":"30","reps":"14"},{"weight":"30","reps":"16"}]},{"date":"2026-06-07","sets":[{"weight":"32.5","reps":"14"},{"weight":"32.5","reps":"14"},{"weight":"32.5","reps":"14"}]},{"date":"2026-06-16","sets":[{"weight":"35","reps":"14"},{"weight":"35","reps":"14"},{"weight":"35","reps":"14"}]}],"B::Seated Cable Row (wide grip)::comment":[{"comment":"37.5 ok"}],"B::Single-Arm DB Row":[{"date":"2026-06-03","sets":[{"weight":"12.5","reps":"12"},{"weight":"12.5","reps":"12"},{"weight":"12.5","reps":"12"}]},{"date":"2026-06-07","sets":[{"weight":"12","reps":"12"},{"weight":"12","reps":"12"},{"weight":"12","reps":"11"}]},{"date":"2026-06-16","sets":[{"weight":"12.5","reps":"12"},{"weight":"12.5","reps":"12"},{"weight":"12.5","reps":"14"}]}],"B::Single-Arm DB Row::comment":[{"comment":"probiere uf 14reps pushe"}],"B::Face Pull":[{"date":"2026-06-03","sets":[{"weight":"15","reps":"15"},{"weight":"15","reps":"15"},{"weight":"15","reps":"15"}]},{"date":"2026-06-07","sets":[{"weight":"15","reps":"15"},{"weight":"15","reps":"15"},{"weight":"15","reps":"15"}]},{"date":"2026-06-16","sets":[{"weight":"15","reps":"15"},{"weight":"15","reps":"15"},{"weight":"15","reps":"15"}]}],"B::Face Pull::comment":[{"comment":"guets gwicht"}],"B::Incline DB Curl":[{"date":"2026-06-03","sets":[{"weight":"10","reps":"10"},{"weight":"10","reps":"9"},{"weight":"10","reps":"5"}]},{"date":"2026-06-07","sets":[{"weight":"10","reps":"10"},{"weight":"10","reps":"10"},{"weight":"10","reps":"7"}]},{"date":"2026-06-16","sets":[{"weight":"10","reps":"11"},{"weight":"10","reps":"11"},{"weight":"10","reps":"10"}]}],"B::Incline DB Curl::comment":[{"comment":""}],"B::Hammer Curl":[{"date":"2026-06-03","sets":[{"weight":"6","reps":"13"},{"weight":"6","reps":"12"},{"weight":"6","reps":"12"}]},{"date":"2026-06-07","sets":[{"weight":"6","reps":"13"},{"weight":"6","reps":"15"},{"weight":"6","reps":"15"}]},{"date":"2026-06-16","sets":[{"weight":"7","reps":"14"},{"weight":"7","reps":"14"},{"weight":"7","reps":"12"}]}],"B::Hammer Curl::comment":[{"comment":""}],"A::Incline Barbell Press":[{"date":"2026-06-05","sets":[{"weight":"10","reps":"10"},{"weight":"15","reps":"10"},{"weight":"15","reps":"8"},{"weight":"15","reps":"7"}]},{"date":"2026-06-12","sets":[{"weight":"10","reps":"10"},{"weight":"15","reps":"10"},{"weight":"15","reps":"10"},{"weight":"15","reps":"9"}]},{"date":"2026-06-20","sets":[{"weight":"10","reps":"10"},{"weight":"15","reps":"10"},{"weight":"15","reps":"7"},{"weight":"15","reps":"6"}]}],"A::Incline Barbell Press::comment":[{"comment":"ohni füehrig besser"}],"A::Flat Dumbbell Press":[{"date":"2026-06-05","sets":[{"weight":"15","reps":"11"},{"weight":"15","reps":"11"},{"weight":"15","reps":"11"}]},{"date":"2026-06-12","sets":[{"weight":"17.5","reps":"10"},{"weight":"17.5","reps":"8"},{"weight":"17.5","reps":"8"}]},{"date":"2026-06-20","sets":[{"weight":"17.5","reps":"10"},{"weight":"17.5","reps":"10"},{"weight":"17.5","reps":"10"}]}],"A::Flat Dumbbell Press::comment":[{"comment":""}],"A::Cable Fly (low to high)":[{"date":"2026-06-05","sets":[{"weight":"40","reps":"12"},{"weight":"40","reps":"11"},{"weight":"40","reps":"12"}]},{"date":"2026-06-12","sets":[{"weight":"40","reps":"12"},{"weight":"40","reps":"14"},{"weight":"40","reps":"13"}]},{"date":"2026-06-20","sets":[{"weight":"40","reps":"15"},{"weight":"40","reps":"15"},{"weight":"40","reps":"15"}]}],"A::Cable Fly (low to high)::comment":[{"comment":"42.5"}],"A::Seated DB Overhead Press":[{"date":"2026-06-05","sets":[{"weight":"12.5","reps":"11"},{"weight":"12.5","reps":"11"},{"weight":"12.5","reps":"8"},{"weight":"12.5","reps":"5"}]},{"date":"2026-06-12","sets":[{"weight":"12.5","reps":"12"},{"weight":"12.5","reps":"11"},{"weight":"12.5","reps":"10"},{"weight":"12.5","reps":"9"}]},{"date":"2026-06-20","sets":[{"weight":"15","reps":"12"},{"weight":"15","reps":"9"},{"weight":"15","reps":"8"},{"weight":"15","reps":"7"}]}],"A::Seated DB Overhead Press::comment":[{"comment":"15 guet"}],"A::Cable Lateral Raise":[{"date":"2026-06-05","sets":[{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"14"}]},{"date":"2026-06-12","sets":[{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"18"},{"weight":"2.5","reps":"16"}]},{"date":"2026-06-20","sets":[{"weight":"2.5","reps":"18"},{"weight":"2.5","reps":"18"},{"weight":"2.5","reps":"15"}]}],"A::Cable Lateral Raise::comment":[{"comment":"uf 20 pushe"}],"A::Overhead Tricep Extension (EZ)":[{"date":"2026-06-05","sets":[{"weight":"20","reps":"14"},{"weight":"25","reps":"10"},{"weight":"25","reps":"8"}]},{"date":"2026-06-12","sets":[{"weight":"20","reps":"13"},{"weight":"25","reps":"10"},{"weight":"25","reps":"7"}]},{"date":"2026-06-20","sets":[{"weight":"25","reps":"14"},{"weight":"25","reps":"14"},{"weight":"25","reps":"12"}]}],"A::Overhead Tricep Extension (EZ)::comment":[{"comment":"doppelkabelzug"}],"A::Tricep Pushdown":[{"date":"2026-06-05","sets":[{"weight":"25","reps":"16"},{"weight":"25","reps":"15"},{"weight":"25","reps":"15"}]},{"date":"2026-06-12","sets":[{"weight":"25","reps":"16"},{"weight":"25","reps":"15"},{"weight":"25","reps":"15"}]},{"date":"2026-06-20","sets":[{"weight":"30","reps":"15"},{"weight":"30","reps":"15"},{"weight":"30","reps":"15"}]}],"A::Tricep Pushdown::comment":[{"comment":"doppelkabelzug, 32.5 probiere"}],"C::Standing BB / DB Overhead Press":[{"date":"2026-06-08","sets":[{"weight":"20","reps":"10"},{"weight":"30","reps":"10"},{"weight":"30","reps":"7"},{"weight":"30","reps":"7"}]},{"date":"2026-06-17","sets":[{"weight":"20","reps":"10"},{"weight":"30","reps":"10"},{"weight":"30","reps":"9"},{"weight":"30","reps":"7"}]}],"C::Standing BB / DB Overhead Press::comment":[{"comment":""}],"C::Cable Lateral Raise":[{"date":"2026-06-08","sets":[{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"}]},{"date":"2026-06-17","sets":[{"weight":"2.5","reps":"17"},{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"}]}],"C::Cable Lateral Raise::comment":[{"comment":""}],"C::Pec Deck / Machine Fly":[{"date":"2026-06-08","sets":[{"weight":"25","reps":"15"},{"weight":"27.5","reps":"15"},{"weight":"27.5","reps":"13"}]},{"date":"2026-06-17","sets":[{"weight":"27.5","reps":"15"},{"weight":"27.5","reps":"17"},{"weight":"27.5","reps":"15"}]}],"C::Pec Deck / Machine Fly::comment":[{"comment":"30kg negst mol"}],"C::Dip (weighted if possible)":[{"date":"2026-06-08","sets":[{"weight":"25","reps":"12"},{"weight":"25","reps":"12"},{"weight":"25","reps":"11"}]},{"date":"2026-06-17","sets":[{"weight":"25","reps":"15"},{"weight":"25","reps":"12"},{"weight":"25","reps":"11"}]}],"C::Dip (weighted if possible)::comment":[{"comment":"27.5 probiere"}],"C::DB Front Raise":[{"date":"2026-06-08","sets":[{"weight":"7","reps":"13"},{"weight":"7","reps":"13"},{"weight":"7","reps":"12"}]},{"date":"2026-06-17","sets":[{"weight":"7","reps":"13"},{"weight":"7","reps":"12"},{"weight":"","reps":"13"}]}],"C::DB Front Raise::comment":[{"comment":"push für 15"}],"C::Skull Crusher (EZ bar)":[{"date":"2026-06-08","sets":[{"weight":"7.5","reps":"10"},{"weight":"7.5","reps":"10"},{"weight":"7.5","reps":"8"}]},{"date":"2026-06-17","sets":[{"weight":"7.5","reps":"10"},{"weight":"7.5","reps":"10"},{"weight":"7.5","reps":"8"}]}],"C::Skull Crusher (EZ bar)::comment":[{"comment":"7.5 pro site ok"}],"C::Cable Kickback":[{"date":"2026-06-08","sets":[{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"}]},{"date":"2026-06-17","sets":[{"weight":"2.5","reps":"15"},{"weight":"2.5","reps":"15"}]}],"C::Cable Kickback::comment":[{"comment":""}],"D::Deadlift / Romanian Deadlift":[{"date":"2026-06-10","sets":[{"weight":"20","reps":"8"},{"weight":"60","reps":"8"},{"weight":"80","reps":"8"},{"weight":"80","reps":"8"}]}],"D::Deadlift / Romanian Deadlift::comment":[{"comment":"3x80"}],"D::Chest-Supported Row (machine/incline DB)":[{"date":"2026-06-10","sets":[{"weight":"40","reps":"14"},{"weight":"40","reps":"14"},{"weight":"40","reps":"14"},{"weight":"40","reps":"13"}]}],"D::Chest-Supported Row (machine/incline DB)::comment":[{"comment":"kabelzug row mit lieblingsgriff, 42.5"}],"D::Straight-Arm Pulldown":[{"date":"2026-06-10","sets":[{"weight":"15","reps":"15"},{"weight":"20","reps":"12"},{"weight":"20","reps":"11"}]}],"D::Straight-Arm Pulldown::comment":[{"comment":"20kg"}],"D::Rear Delt Fly (machine or cable)":[{"date":"2026-06-10","sets":[{"weight":"10","reps":"18"},{"weight":"10","reps":"16"},{"weight":"10","reps":"14"}]}],"D::Rear Delt Fly (machine or cable)::comment":[{"comment":""}],"D::Preacher Curl (EZ or Machine)":[{"date":"2026-06-10","sets":[{"weight":"20","reps":"14"},{"weight":"22.5","reps":"14"},{"weight":"22.5","reps":"12"}]}],"D::Preacher Curl (EZ or Machine)::comment":[{"comment":"maschine, 22.5"}],"D::Cable Curl (bilateral)":[{"date":"2026-06-10","sets":[{"weight":"15","reps":"12"},{"weight":"15","reps":"12"},{"weight":"15","reps":"12"}]}],"D::Cable Curl (bilateral)::comment":[{"comment":""}],"D::Reverse Curl":[{"date":"2026-06-10","sets":[{"weight":"10","reps":"12"},{"weight":"10","reps":"12"}]}],"D::Reverse Curl::comment":[{"comment":"langhantle"}]};
+// Auth session (access token etc). The anon key above is public by design;
+// security comes from login + per-user row-level rules, not from hiding it.
+let session = null;
 
+function loadSession(){try{const r=localStorage.getItem(SESSION_KEY);session=r?JSON.parse(r):null;}catch(e){session=null;}}
+function saveSession(){try{session?localStorage.setItem(SESSION_KEY,JSON.stringify(session)):localStorage.removeItem(SESSION_KEY);}catch(e){}}
+
+function authHeaders(){
+  return { apikey: SUPABASE_KEY,
+    Authorization: "Bearer " + (session ? session.access_token : SUPABASE_KEY),
+    "Content-Type": "application/json" };
+}
+
+async function signIn(email,password){
+  const res=await fetch(AUTH+"/token?grant_type=password",{
+    method:"POST",headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify({email,password})});
+  const j=await res.json();
+  if(!res.ok) throw new Error(j.error_description||j.msg||j.error||"Sign-in failed");
+  session={access_token:j.access_token,refresh_token:j.refresh_token,
+    expires_at:Date.now()+(j.expires_in||3600)*1000,email:(j.user&&j.user.email)||email};
+  saveSession();
+}
+
+async function ensureToken(){
+  if(!session) return false;
+  if(Date.now() < session.expires_at - 60000) return true;
+  // refresh
+  try{
+    const res=await fetch(AUTH+"/token?grant_type=refresh_token",{
+      method:"POST",headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({refresh_token:session.refresh_token})});
+    const j=await res.json();
+    if(!res.ok) throw new Error("refresh failed");
+    session={access_token:j.access_token,refresh_token:j.refresh_token,
+      expires_at:Date.now()+(j.expires_in||3600)*1000,email:session.email};
+    saveSession();return true;
+  }catch(e){ session=null;saveSession();return false; }
+}
+
+function signOut(){ session=null;saveSession();
+  try{localStorage.removeItem(CACHE_KEY);}catch(e){}
+  DATA={groups:["A","B","C","D"],exercises:[]};ROW_ID=null;
+  showLogin(); }
+
+/* ========== SEED (empty default for a fresh account) ========== */
 function importLegacy(){
-  const groups=[]; const exercises=[];
-  const order=[]; // preserve first-seen exercise order
-  for(const key of Object.keys(LEGACY)){
-    if(key.endsWith("::comment")) continue;
-    const i=key.indexOf("::");
-    const group=key.slice(0,i); const name=key.slice(i+2);
-    if(!groups.includes(group)) groups.push(group);
-    order.push({group,name,key});
-  }
-  groups.sort();
-  for(const {group,name,key} of order){
-    const sessions=(LEGACY[key]||[]).map(s=>({
-      date:s.date, sets:(s.sets||[]).map(x=>({weight:x.weight??"",reps:x.reps??""}))
-    }));
-    const cKey=key+"::comment";
-    const comment=(LEGACY[cKey]&&LEGACY[cKey][0]&&LEGACY[cKey][0].comment)||"";
-    exercises.push({id:uid(),group,name,comment,sessions});
-  }
-  return {groups,exercises};
+  // A brand-new account starts empty — your real training data lives in your
+  // own Supabase row, not in this file. Renamed kept for call-site compatibility.
+  return {groups:["A","B","C","D"],exercises:[]};
 }
 
 /* ========== STATE & HELPERS ========== */
@@ -249,14 +310,16 @@ function cacheLoad(){try{const r=localStorage.getItem(CACHE_KEY);return r?JSON.p
 
 async function loadFromCloud(){
   setSync("load");
+  if(!(await ensureToken())){ showLogin(); return; }
   try{
-    const res=await fetch(REST+"?select=*&order=updated_at.desc&limit=1",{headers:HEADERS});
+    const res=await fetch(REST+"?select=*&order=updated_at.desc&limit=1",{headers:authHeaders()});
+    if(res.status===401){ session=null;saveSession();showLogin();return; }
     if(!res.ok) throw new Error("HTTP "+res.status);
     const rows=await res.json();
     if(rows.length===0){
-      // create a row, seed with legacy import
+      // first time for this account: create a row seeded with the imported log
       const seeded=importLegacy();
-      const ins=await fetch(REST,{method:"POST",headers:{...HEADERS,Prefer:"return=representation"},
+      const ins=await fetch(REST,{method:"POST",headers:{...authHeaders(),Prefer:"return=representation"},
         body:JSON.stringify({data:seeded})});
       const created=await ins.json();
       ROW_ID=created[0].id; DATA=seeded;
@@ -264,7 +327,6 @@ async function loadFromCloud(){
       ROW_ID=rows[0].id;
       const d=rows[0].data;
       if(!d||!d.exercises||d.exercises.length===0){
-        // empty seed row -> import legacy
         DATA=importLegacy();
         await pushNow();
       }else{
@@ -294,10 +356,12 @@ function normalize(d){
 async function pushNow(){
   cacheSave();
   if(ROW_ID==null) return;
+  if(!(await ensureToken())){ setSync("off"); return; }
   try{
     const res=await fetch(REST+"?id=eq."+ROW_ID,{method:"PATCH",
-      headers:{...HEADERS,Prefer:"return=minimal"},
+      headers:{...authHeaders(),Prefer:"return=minimal"},
       body:JSON.stringify({data:DATA,updated_at:new Date().toISOString()})});
+    if(res.status===401){ session=null;saveSession();showLogin();return; }
     if(!res.ok) throw new Error("HTTP "+res.status);
     online=true; setSync("synced");
   }catch(err){ online=false; setSync("off"); }
@@ -703,10 +767,13 @@ function openMainMenu(){
     exp.onclick=()=>{exportBackup();};
     const reload=el("button",null);reload.innerHTML='<span class="ic">⟳</span> Reload from cloud';
     reload.onclick=async()=>{closeSheet();await loadFromCloud();render();toast(online?"Reloaded":"Offline");};
-    list.appendChild(grp);list.appendChild(exp);list.appendChild(reload);
+    const out=el("button","danger");out.innerHTML='<span class="ic">⎋</span> Sign out';
+    out.onclick=()=>{closeSheet();signOut();};
+    list.appendChild(grp);list.appendChild(exp);list.appendChild(reload);list.appendChild(out);
     sheet.appendChild(list);
     const st=el("p","hint",null);
-    st.textContent=(online?"Synced to cloud":"Offline — changes saved locally, will sync when back online")+".";
+    st.textContent=(session&&session.email?("Signed in as "+session.email+". "):"")
+      +(online?"Synced to cloud":"Offline — changes saved locally, will sync when back online")+".";
     sheet.appendChild(st);
   });
 }
@@ -723,15 +790,46 @@ $("#gearBtn").onclick=openMainMenu;
 window.addEventListener("online",()=>{online=true;pushNow();});
 window.addEventListener("offline",()=>{online=false;setSync("off");});
 
-/* ========== BOOT ========== */
-(async function(){
-  // show cache instantly if present, then refresh from cloud
+/* ========== LOGIN GATE ========== */
+function showLogin(){
+  $("#app").style.display="none";
+  const lg=$("#login");lg.style.display="flex";
+  $("#liErr").textContent="";
+  setTimeout(()=>$("#liEmail").focus(),100);
+}
+async function showApp(){
+  $("#login").style.display="none";
+  $("#app").style.display="block";
   const c=cacheLoad();
   if(c&&c.data&&c.data.exercises&&c.data.exercises.length){
     ROW_ID=c.rowId;DATA=normalize(c.data);activeGroup=DATA.groups[0];render();
   }
   await loadFromCloud();
   render();
+}
+async function doLogin(){
+  const email=$("#liEmail").value.trim();
+  const pass=$("#liPass").value;
+  const btn=$("#liBtn"),err=$("#liErr");
+  if(!email||!pass){err.textContent="Enter your email and password.";return;}
+  btn.disabled=true;btn.textContent="Signing in…";err.textContent="";
+  try{
+    await signIn(email,pass);
+    $("#liPass").value="";
+    await showApp();
+  }catch(e){
+    err.textContent=/Invalid login/i.test(e.message)?"Wrong email or password.":e.message;
+  }finally{ btn.disabled=false;btn.textContent="Sign in"; }
+}
+$("#liBtn").onclick=doLogin;
+$("#liPass").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+$("#liEmail").addEventListener("keydown",e=>{if(e.key==="Enter")$("#liPass").focus();});
+
+/* ========== BOOT ========== */
+(async function(){
+  loadSession();
+  if(await ensureToken()){ await showApp(); }
+  else { showLogin(); }
 })();
 </script>
 </body>
