@@ -1,6 +1,6 @@
 # Ironlog
 
-A minimal, offline-friendly gym tracker that lives on your phone's home screen. Log your lifts, see your last few sessions at a glance, and track progress with built-in charts. No app store, no subscription — just a single HTML file backed by a free database.
+A minimal, offline-friendly gym tracker that lives on your phone's home screen. Log your lifts, see your last few sessions at a glance, and track progress with built-in charts. No app store, no subscription — just a single HTML file backed by a free database, behind a login.
 
 **Live app:** https://davidkellerch.github.io/gym-tracker/
 
@@ -11,13 +11,14 @@ A minimal, offline-friendly gym tracker that lives on your phone's home screen. 
 - **Workout days (A / B / C / D)** — group exercises however you split your training. Rename, add, or remove days anytime.
 - **Add exercises by name** — type a name, pick a day, start logging. No fixed list.
 - **Fast set logging** — weight + reps per set, with your previous numbers shown as a faded "target to beat." Reps that beat last time tick green.
-- **Last 3 sessions inline** — see recent history above today's entry, with full history expandable.
+- **Last 3 sessions inline** — recent history above today's entry, with full history expandable.
 - **Per-exercise notes** — keep cues like "push for 15 reps" or "try 47.5 next time."
 - **Progress charts** (tap ⋯ → *View progress*):
   - Top-set weight over time
   - Estimated 1RM trend (Epley formula — an estimate, not a literal max)
   - Total volume per session (weight × reps)
 - **Works offline** — logging and charts work without signal; data syncs to the cloud when you're back online.
+- **Login-protected** — your data is private to your account.
 - **Backup export** — download your whole log as JSON anytime (⚙ menu).
 
 ---
@@ -27,17 +28,19 @@ A minimal, offline-friendly gym tracker that lives on your phone's home screen. 
 The entire app is **one `index.html` file**. There's no build step and no framework. It uses:
 
 - **GitHub Pages** to host the file for free at a public URL.
-- **Supabase** (free tier) as the database. Your whole log is stored as a single JSON record.
-- **Browser storage** as an offline cache, so the app opens and works even with no connection. Changes sync to Supabase automatically once you're online.
+- **Supabase** (free tier) for the database and authentication. Your whole log is stored as a single JSON record, owned by your account.
+- **Browser storage** as an offline cache, so the app opens and works even with no connection. Changes sync to Supabase once you're online.
 - **PWA install** — "Add to Home Screen" in Safari makes it open fullscreen like a native app.
 
-Your data is just a JSON object: a list of workout days and a list of exercises, each with dated sessions of sets. Simple and portable.
+### A note on the public key
+
+This is a static site, so the Supabase URL and **anon key** sit in `index.html` for anyone to see. That's expected: the anon key is designed to be public. Security comes from **login plus row-level rules**, not from hiding the key. Without a valid account, that key can't read or write anything. The repository contains **no personal training data** — all of that lives only in the private Supabase database.
 
 ---
 
 ## Run your own copy
 
-You don't need access to anyone else's database — set up your own in about 10 minutes. Everything below is free and needs no credit card.
+You don't need access to anyone else's database — set up your own in about 15 minutes. Everything below is free and needs no credit card.
 
 ### 1. Create a Supabase project
 
@@ -48,23 +51,24 @@ You don't need access to anyone else's database — set up your own in about 10 
 ```sql
 create table workouts (
   id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) default auth.uid(),
   data jsonb not null,
   updated_at timestamptz default now()
 );
 
-insert into workouts (data) values ('{}'::jsonb);
-
 alter table workouts enable row level security;
 
-create policy "public access" on workouts
-  for all using (true) with check (true);
+create policy "own rows" on workouts
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 ```
 
-4. Go to **Project Settings → API** and copy two values:
-   - **Project URL** (looks like `https://xxxxx.supabase.co`)
-   - **anon public** key (a long string under "Project API keys")
+This creates a table where each row is owned by a user, and a rule so a signed-in user can only ever read or write their own rows.
 
-### 2. Add your credentials to the app
+### 2. Create your account
+
+In Supabase → **Authentication → Users → Add user**. Enter your email and a password, and tick **Auto Confirm User** so you can sign in right away (no confirmation email). There is deliberately **no sign-up inside the app** — accounts are created here only, so no stranger can register.
+
+### 3. Add your credentials to the app
 
 Open `index.html` and find the config block near the top of the `<script>`:
 
@@ -73,42 +77,35 @@ const SUPABASE_URL = "YOUR_SUPABASE_URL";   // e.g. https://xxxxx.supabase.co
 const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
 ```
 
-Replace the two placeholders with your own values. Use the base Project URL — **without** any `/rest/v1/` on the end; the app adds that itself.
+Replace the two placeholders with your own values (Project Settings → API). Use the base Project URL — **without** any `/rest/v1/` on the end; the app adds that itself.
 
-### 3. Host it on GitHub Pages
+### 4. Host it on GitHub Pages
 
 1. Create a new **public** repository on GitHub.
-2. Upload your edited `index.html` to it (**Add file → Upload files → Commit**).
-3. In the repo: **Settings → Pages → Deploy from a branch**, choose `main` / root, **Save**.
-4. After ~1 minute you'll get a URL like `https://yourname.github.io/your-repo/`.
+2. Upload your edited `index.html` (**Add file → Upload files → Commit**).
+3. Repo **Settings → Pages → Deploy from a branch** → `main` / root → **Save**.
+4. After ~1 minute you get a URL like `https://yourname.github.io/your-repo/`.
 
-### 4. Install on your iPhone
+### 5. Install on your iPhone
 
 1. Open the Pages URL in **Safari**.
 2. Tap **Share → Add to Home Screen**.
-3. It now opens fullscreen like a native app.
-
-On first launch with an empty database, the app starts blank — just add your days and exercises. (This repo's copy is pre-seeded with the owner's starting log; a fresh Supabase project of your own will start empty.)
+3. Open it, sign in with the account from step 2, and start logging. A fresh account starts empty — add your days and exercises.
 
 ---
 
-## A note on privacy
+## Want it even more private?
 
-Because the repo is **public**, the Supabase URL and anon key in `index.html` are visible to anyone who looks. The anon key is designed to be public for browser apps, but combined with the open table policy above, **anyone who has the URL and key could read or write that database.**
-
-For a personal gym log this is usually an acceptable trade-off. If you want it locked down, options include:
-
-- Making the GitHub repo private (note: GitHub Pages on private repos requires a paid plan).
-- Replacing the open policy with Supabase **Auth** so only a signed-in user can read/write.
-
-If you'd like the locked-down version, that's a reasonable next step — it's a moderate change to both the SQL policy and the app's data calls.
+- **Private repo:** hides the URL and key entirely, but GitHub Pages on private repos needs a paid plan.
+- **Self-hosted proxy:** a small serverless function (e.g. Cloudflare Worker) can hold the keys server-side so they never appear in the browser. More setup; usually unnecessary once login is in place.
 
 ---
 
 ## Tech notes
 
 - **No dependencies.** Plain HTML, CSS, and vanilla JavaScript. Charts are hand-drawn SVG, so they work fully offline.
-- **Data model.** One Supabase row holds a JSON object: `{ groups: [...], exercises: [{ id, group, name, comment, sessions: [{ date, sets: [{ weight, reps }] }] }] }`.
+- **Auth.** Email + password via Supabase Auth (GoTrue). The browser holds a short-lived access token that auto-refreshes; sign-out clears it.
+- **Data model.** One Supabase row per user holds a JSON object: `{ groups: [...], exercises: [{ id, group, name, comment, sessions: [{ date, sets: [{ weight, reps }] }] }] }`.
 - **Estimated 1RM** uses the Epley formula: `weight × (1 + reps / 30)`, taken from your best set each session.
 - **Offline behaviour.** The app caches your latest data locally. Edits made offline are kept and pushed to Supabase next time it connects.
 
